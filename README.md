@@ -25,3 +25,7 @@ Qué tal un editor que permitiera crear el foldable para esa presentación. Ser�
 Qué tal un conversor que permitiera generar el foldable de un libro, o un post. 
 
 Qué tal si el contenido que presenta nuestro navegador web pudiera ser automáticamente organizado de esa manera.
+
+## Lab
+
+[Lab](https://akobashikawa.github.io/foldable/)
