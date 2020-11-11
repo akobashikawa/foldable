@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foldable</title>
+
+  <style>
+    ul.foldable, ul.foldable ul {
+      padding-left: 0.1em;
+      list-style-type: none;
+      border-left: 4px solid rgba(0,140,254,0.3);
+    }
+
+    ul.foldable li {
+      margin-top: 1em;
+    }
+
+    ul.foldable .actions {
+      display: inline-block;
+    }
+
+    ul.foldable ul {
+      display: none;
+    }
+
+    ul.foldable li.more {
+      /* background-color: cyan; */
+    }
+
+    ul.foldable li.more > ul {
+      display: block;
+    }
+
+    .actions a {
+      text-decoration: none;
+      display: inline-block;
+      padding: 0 0.2em;
+    }
+
+    .actions a.more:hover {
+    }
+
+    .actions a.less:hover {
+    }
+
+    li > .actions a.less {
+      display: none;
+    }
+
+    li.more > .actions a.less {
+      display: inline-block;
+    }
+
+    li.more > .actions a.more {
+      display: none;
+    }
+
+    /*
+
+    ul.foldable ul.more {
+      display: block;
+    }
+    
+
+    ul.foldable > li, ul.more > li {
+      display: block;
+    }
+
+    ul > li.actions a,
+    ul.more > li.actions a.more
+    {
+      display: none;
+    }
+    
+    ul > li.actions a.more,
+    ul.more > li.actions a.less
+    {
+      display: inline-block;
+    }
+
+    */
+  </style>
+</head>
+<body>
+  <h1>Foldable</h1>
+
+  <h2>Title</h2>
+  <ul class="foldable">
+    <li>
+      AAA Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+    </li>
+    <li>
+      BBB Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+      <ul>
+        <li>
+          BBB AAA Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+          beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+        </li>
+        <li>
+          BBB BBB Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+          beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+          <ul>
+            <li>
+              BBB BBB AAA Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+              beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+            </li>
+            <li>
+              BBB BBB BBB Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+              beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+              <ul>
+                <li>BBB BBB BBB AAA</li>
+              </ul>
+            </li>
+            <li>
+              BBB BBB CCC Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+              beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+            </li>
+          </ul>
+        </li>
+        <li>
+          BBB CCC Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum
+          beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+        </li>
+      </ul>
+    </li>
+    <li>
+      CCC Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+      <ul>
+        <li>CCC AAA</li>
+      </ul>
+    </li>
+    <li>
+      DDD Lorem ipsum dolor sit amet consectetur adipisicing elit. Distinctio magni ipsum deleniti amet qui dicta illum, rerum beatae maiores ratione doloribus, a molestiae ex nisi voluptatem inventore aut? Assumenda, deleniti.
+    </li>
+  </ul>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.js" integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc="
+    crossorigin="anonymous"></script>
+
+  <script>
+    $(document).ready(function() {
+
+      // $('ul.foldable > li').addClass('more');
+      $('ul.foldable li:has(ul)').prepend('<span class="actions"><a href="#" class="more">➕</a><a href="#" class="less">➖</a></span>');
+
+      $('a.more').click(function() {
+        $(this)
+          .parent() // span
+          .parent() // li
+          .addClass('more');
+      });
+
+      $('a.less').click(function() {
+        $(this)
+          .parent() // span
+          .parent() // li
+          .removeClass('more');
+      });
+    });
+  </script>
+</body>
+</html>
