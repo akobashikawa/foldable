@@ -32,54 +32,30 @@
       display: block;
     }
 
-    .actions a {
+    ul.foldable .actions a {
       text-decoration: none;
       display: inline-block;
       padding: 0 0.2em;
     }
 
-    .actions a.more:hover {
+    ul.foldable .actions a.more:hover {
     }
 
-    .actions a.less:hover {
+    ul.foldable .actions a.less:hover {
     }
 
-    li > .actions a.less {
+    ul.foldable li > .actions a.less {
       display: none;
     }
 
-    li.more > .actions a.less {
+    ul.foldable li.more > .actions a.less {
       display: inline-block;
     }
 
-    li.more > .actions a.more {
+    ul.foldable li.more > .actions a.more {
       display: none;
     }
 
-    /*
-
-    ul.foldable ul.more {
-      display: block;
-    }
-    
-
-    ul.foldable > li, ul.more > li {
-      display: block;
-    }
-
-    ul > li.actions a,
-    ul.more > li.actions a.more
-    {
-      display: none;
-    }
-    
-    ul > li.actions a.more,
-    ul.more > li.actions a.less
-    {
-      display: inline-block;
-    }
-
-    */
   </style>
 </head>
 <body>
@@ -141,7 +117,6 @@
   <script>
     $(document).ready(function() {
 
-      // $('ul.foldable > li').addClass('more');
       $('ul.foldable li:has(ul)').prepend('<span class="actions"><a href="#" class="more">➕</a><a href="#" class="less">➖</a></span>');
 
       $('a.more').click(function() {
