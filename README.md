@@ -16,7 +16,7 @@ Y que cada frase pudiera conducir a su detalle, constituido a su vez por una lis
 
 Es posible hacer esto, desde que es posible resumir un libro.
 
-Aunque la idea de jerarquizar contenido no es nueva (un procesador de texto, por ejemplo, permite organizar un trabajo en secciones, capítulos, etc),  pero pienso que la presentación puede aprovechar las posibilidades de mostrar u ocultar contenido a demanda del lector.
+Aunque la idea de jerarquizar contenido no es nueva (un procesador de texto, por ejemplo, permite organizar un trabajo en secciones, capítulos, etc),  pienso que la presentación puede aprovechar las posibilidades de mostrar u ocultar contenido a demanda del lector.
 
 Qué tal si pudieras leer un libro, según cuánto detalle quisieras, plegando el contenido a voluntad.
 
