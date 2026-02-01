@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epub Simple Reader</title>
+    <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+
+    <style>
+
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <h1>📖 Epub Simple reader</h1>
+            <div class="file-input-wrapper">
+                <button class="btn" @click="$refs.fileInput.click()">Load Epub</button>
+                <input ref="fileInput" type="file" @change="handleFileUpload" accept=".epub" style="display: none;">
+            </div>
+
+        </header>
+
+        <main>
+            <pre> {{ epubData }} </pre>
+
+            <div v-if="epubData && epubData.contentFiles">
+                <h2>Content Files: {{ epubData.contentFiles.length }})</h2>
+                <div v-for="(file, index) in epubData.contentFiles" :key="index" class="content-file">
+                    <h3>{{ file.path }}</h3>
+                    <div v-html="file.content"></div>
+                </div>
+            </div>
+
+        </main>
+
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            components: {
+            },
+            data() {
+                return {
+                    loading: false,
+                    loadingMessage: 'Loading...',
+                    error: null,
+                    epubData: null
+                };
+            },
+            methods: {
+
+                triggerFileInput() {
+                    this.$refs.fileInput.click();
+                },
+
+                async handleFileUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    filename = file.name;
+                    console.log('File name:', filename);
+
+                    this.loading = true;
+                    this.error = null;
+                    this.loadingMessage = 'Loading file...';
+
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const fileLength = arrayBuffer.byteLength;
+                        console.log('File size (bytes):', fileLength);
+
+                        this.loadingMessage = 'Unzipping Epub...';
+                        const zip = await JSZip.loadAsync(arrayBuffer);
+                        console.log('Found files in zip:', Object.keys(zip.files).length);
+                        // zip es el objeto JSZip ya cargado
+                        const fileList = Object.entries(zip.files).map(([path, file]) => ({
+                            name: path,                                // Nombre con ruta
+                            size: file._data.uncompressedSize,         // Tamaño descomprimido
+                            compressedSize: file._data.compressedSize, // Tamaño comprimido
+                            date: file._data.date,                     // Fecha de modificación
+                        }));
+
+
+                        this.loadingMessage = 'Loading structure...';
+                        const opfFile = await this.findOpfFile(zip);
+                        console.log('Found OPF:', opfFile);
+
+                        const opfContent = await zip.file(opfFile).async('string');
+                        const parser = new DOMParser();
+                        const opfDoc = parser.parseFromString(opfContent, 'text/xml');
+
+                        this.loadingMessage = 'Loading content...';
+                        const contentFiles = await this.getContentFiles(opfDoc, zip, opfFile);
+                        console.log('Found files in content:', contentFiles.length);
+
+                        // mostrar una lista de contentFiles y su contenido
+
+
+                        this.epubData = {
+                            filename,
+                            fileLength,
+                            fileList,
+                            opfFile,
+                            contentFiles,
+                            hash: await this.hashFile(arrayBuffer)
+                        };
+
+                        console.log('Process completed');
+
+                    } catch (error) {
+                        console.error('Error processing Epub:', error);
+                        this.error = `Error processing Epub: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                        // Resetear el input para permitir cargar el mismo archivo de nuevo
+                        event.target.value = '';
+                    }
+                },
+
+                async findOpfFile(zip) {
+                    try {
+                        const container = await zip.file('META-INF/container.xml').async('string');
+                        const parser = new DOMParser();
+                        const containerDoc = parser.parseFromString(container, 'text/xml');
+                        const rootfile = containerDoc.querySelector('rootfile');
+                        return rootfile.getAttribute('full-path');
+                    } catch (error) {
+                        // Algunos EPUBs tienen estructuras diferentes, buscar archivos .opf
+                        for (const filename in zip.files) {
+                            if (filename.endsWith('.opf')) {
+                                return filename;
+                            }
+                        }
+                        throw new Error('No se encontró el archivo OPF');
+                    }
+                },
+
+                async getContentFiles(opfDoc, zip, opfPath) {
+                    const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+                    const manifest = {};
+
+                    // Construir manifest
+                    opfDoc.querySelectorAll('manifest item').forEach(item => {
+                        manifest[item.getAttribute('id')] = {
+                            href: item.getAttribute('href'),
+                            type: item.getAttribute('media-type')
+                        };
+                    });
+
+                    const spineItems = opfDoc.querySelectorAll('spine itemref');
+                    const contentFiles = [];
+
+                    for (const item of spineItems) {
+                        const idref = item.getAttribute('idref');
+                        if (manifest[idref] && manifest[idref].type.includes('html')) {
+                            const filePath = opfDir + manifest[idref].href;
+                            try {
+                                let content = await zip.file(filePath).async('string');
+
+                                // Reemplazar rutas de imágenes con Data URLs
+                                content = await this.replaceImagePaths(content, opfDir, zip);
+
+                                contentFiles.push({
+                                    path: filePath,
+                                    content: content
+                                });
+                            } catch (e) {
+                                console.warn('No se pudo leer:', filePath);
+                            }
+                        }
+                    }
+                    return contentFiles;
+                },
+
+                async replaceImagePaths(htmlContent, opfDir, zip) {
+                    const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+
+                    // Collectar todas las coincidencias
+                    const matches = [];
+                    let match;
+                    while ((match = imgRegex.exec(htmlContent)) !== null) {
+                        matches.push(match);
+                    }
+
+                    // Procesar todas las imágenes en paralelo
+                    const results = await Promise.all(matches.map(async (m) => {
+                        const [fullMatch, src] = m;
+
+                        // Ignorar URLs absolutas o data URLs
+                        if (src.startsWith('http') || src.startsWith('data:')) return fullMatch;
+
+                        // Resolver ruta relativa
+                        const imagePath = src.startsWith('../')
+                            ? opfDir + src.replace('../', '')
+                            : opfDir + src;
+
+                        try {
+                            const imageData = await zip.file(imagePath).async('base64');
+                            const mimeType = this.getMimeType(src);
+                            return fullMatch.replace(src, `data:${mimeType};base64,${imageData}`);
+                        } catch (e) {
+                            console.warn('Imagen no encontrada:', imagePath);
+                            return fullMatch;
+                        }
+                    }));
+
+                    // Reemplazar todas las coincidencias con sus resultados
+                    let result = htmlContent;
+                    // Ordenar por posición inversa para no afectar los índices
+                    const sortedMatches = matches.map((m, i) => ({ match: m, result: results[i] }))
+                        .sort((a, b) => b.match.index - a.match.index);
+
+                    for (const { match, result: newContent } of sortedMatches) {
+                        result = result.substring(0, match.index) +
+                            newContent +
+                            result.substring(match.index + match[0].length);
+                    }
+
+                    return result;
+                },
+
+                getMimeType(filename) {
+                    const ext = filename.split('.').pop().toLowerCase();
+                    const types = {
+                        'png': 'image/png',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'gif': 'image/gif',
+                        'svg': 'image/svg+xml',
+                        'webp': 'image/webp'
+                    };
+                    return types[ext] || 'image/png';
+                },
+
+
+                async hashFile(arrayBuffer) {
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                },
+
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

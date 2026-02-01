@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epub Loader</title>
+    <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+</head>
+
+<body>
+    <h1>Epub Loader</h1>
+    <div id="app">
+        <input type="file" @change="handleFileChange" />
+        <div v-if="file">
+            <p>
+                <strong>{{ file.name }}</strong>
+                [{{ file.type }}]
+                [{{ (file.size / 1024).toFixed(2) }} KB]
+                [{{ new Date(file.lastModified).toLocaleString() }}]
+            </p>
+        </div>
+        <div v-if="tree">
+            <h2>Estructura:</h2>
+            <pre>{{ tree }}</pre>
+            <div v-if="loading">
+                <p>{{ loadingMessage }}</p>
+            </div>
+            <div v-if="error">
+                <p>{{ error }}</p>
+            </div>
+            <div v-if="epubData">
+                <p>Nombre del archivo: {{ epubData.filename }}</p>
+                <p>Hash: {{ epubData.hash }}</p>
+            </div>
+            <div v-if="stats">
+                <p>Estadísticas:</p>
+                <pre>{{ stats }}</pre>
+            </div>
+            <div v-if="expandLevel">
+                <p>Nivel de expansión:</p>
+                <pre>{{ expandLevel }}</pre>
+            </div>
+
+
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        const app = Vue.createApp({
+            data() {
+                return {
+                    file: null,
+                    tree: null,
+                    loading: false,
+                    error: null,
+                    loadingMessage: '',
+                    epubData: null,
+                    stats: null,
+                    expandLevel: null
+                };
+            },
+            methods: {
+                async handleFileChange(event) {
+                    this.file = event.target.files[0];
+                    if (!this.file) return;
+
+                    console.log('Archivo seleccionado:', this.file.name);
+
+                    this.loading = true;
+                    this.error = null;
+                    this.loadingMessage = 'Leyendo archivo EPUB...';
+
+                    try {
+                        const arrayBuffer = await this.file.arrayBuffer();
+                        console.log('Archivo leído, tamaño:', arrayBuffer.byteLength);
+
+                        this.loadingMessage = 'Descomprimiendo EPUB...';
+                        const zip = await JSZip.loadAsync(arrayBuffer);
+                        console.log('ZIP cargado, archivos:', Object.keys(zip.files).length);
+
+                        this.loadingMessage = 'Analizando estructura...';
+                        const opfFile = await this.findOpfFile(zip);
+                        console.log('OPF encontrado:', opfFile);
+
+                        const opfContent = await zip.file(opfFile).async('string');
+                        const parser = new DOMParser();
+                        const opfDoc = parser.parseFromString(opfContent, 'text/xml');
+
+                        this.loadingMessage = 'Extrayendo contenido...';
+                        const contentFiles = await this.getContentFiles(opfDoc, zip, opfFile);
+                        console.log('Archivos de contenido:', contentFiles.length);
+
+                        this.loadingMessage = 'Construyendo árbol...';
+                        this.tree = await this.buildTree(contentFiles, this.file.name);
+                        console.log('Árbol construido:', this.tree);
+
+                        this.calculateStats();
+                        this.applyExpandLevel();
+
+                        this.epubData = {
+                            filename: this.file.name,
+                            hash: await this.hashFile(arrayBuffer)
+                        };
+
+                        console.log('Procesamiento completado');
+
+                    } catch (error) {
+                        console.error('Error procesando EPUB:', error);
+                        this.error = `Error al procesar el archivo: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                        // Resetear el input para permitir cargar el mismo archivo de nuevo
+                        event.target.value = '';
+                    }
+                },
+
+                async findOpfFile(zip) {
+                    const containerFile = await zip.file('META-INF/container.xml').async('string');
+                    const parser = new DOMParser();
+                    const containerDoc = parser.parseFromString(containerFile, 'text/xml');
+                    const rootfile = containerDoc.querySelector('rootfile');
+                    if (!rootfile) throw new Error('No se encontró el archivo OPF en container.xml');
+                    return rootfile.getAttribute('full-path');
+                },
+
+                async getContentFiles(opfDoc, zip, opfPath) {
+                    const manifest = Array.from(opfDoc.querySelectorAll('item')).reduce((acc, item) => {
+                        acc[item.getAttribute('id')] = item.getAttribute('href');
+                        return acc;
+                    }, {});
+
+                    const spine = Array.from(opfDoc.querySelectorAll('itemref')).map(ref => {
+                        const id = ref.getAttribute('idref');
+                        return manifest[id];
+                    });
+
+                    return spine;
+                },
+
+                async buildTree(contentFiles, fileName) {
+                    return {
+                        name: fileName,
+                        type: 'root',
+                        children: contentFiles.map(path => ({ name: path, type: 'file' }))
+                    };
+                },
+
+                calculateStats() {
+                    // Lógica para calcular estadísticas del contenido
+                },
+
+                applyExpandLevel() {
+                    // Lógica para controlar la expansión visual del árbol
+                },
+
+                async hashFile(arrayBuffer) {
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+
+            }
+        });
+        app.mount('#app');
+    </script>
+</body>
+
+</html>

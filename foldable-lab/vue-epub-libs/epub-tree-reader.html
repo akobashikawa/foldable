@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epub Tree Reader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #app {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #2a2a2a;
+            padding: 1rem;
+            border-bottom: 2px solid #3a3a3a;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.2rem;
+            color: #4a9eff;
+            flex: 1;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+        }
+
+        .file-input-wrapper input[type=file] {
+            display: none;
+        }
+
+        .btn {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #3a8eef;
+        }
+
+        .btn.secondary {
+            background: #555;
+        }
+
+        .btn.secondary:hover {
+            background: #666;
+        }
+
+        .controls {
+            background: #252525;
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .controls label {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .controls select {
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .tree-node {
+            margin-left: 0;
+        }
+
+        .node-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+            margin-bottom: 0.3rem;
+        }
+
+        .node-header:hover {
+            background: #2a2a2a;
+        }
+
+        .toggle {
+            min-width: 20px;
+            font-size: 0.8rem;
+            color: #888;
+            user-select: none;
+        }
+
+        .node-content {
+            flex: 1;
+        }
+
+        .node-type-book {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4a9eff;
+        }
+
+        .node-type-chapter {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #6ab7ff;
+        }
+
+        .node-type-section {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #8ac5ff;
+        }
+
+        .node-type-paragraph {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .node-children {
+            margin-left: 1.5rem;
+            border-left: 1px solid #3a3a3a;
+            padding-left: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #888;
+        }
+
+        .loading-spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #4a9eff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #666;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 1rem;
+            color: #888;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .error {
+            background: #ff4444;
+            color: white;
+            padding: 1rem;
+            margin: 1rem;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>📖 Epub Tree reader</h1>
+            <div class="file-input-wrapper">
+                <button class="btn" @click="triggerFileInput">Load Epub</button>
+                <input ref="fileInput" type="file" @change="handleFileUpload" accept=".epub">
+            </div>
+            <button v-if="tree" class="btn secondary" @click="exportMeta">Exportar .meta</button>
+        </div>
+
+        <div v-if="tree" class="controls">
+            <label>Expandir hasta nivel:</label>
+            <select v-model.number="expandLevel" @change="applyExpandLevel">
+                <option :value="0">Todo colapsado</option>
+                <option :value="1">Libro</option>
+                <option :value="2">Capítulos</option>
+                <option :value="3">Secciones</option>
+                <option :value="4">Párrafos</option>
+                <option :value="999">Todo expandido</option>
+            </select>
+
+            <div class="stats">
+                <span>Capítulos: {{ stats.chapters }}</span>
+                <span>Secciones: {{ stats.sections }}</span>
+                <span>Párrafos: {{ stats.paragraphs }}</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div v-if="error" class="error">
+                {{ error }}
+            </div>
+
+            <div v-if="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>{{ loadingMessage }}</p>
+            </div>
+
+            <div v-else-if="!tree" class="empty-state">
+                <h2>Epub Tree Reader</h2>
+                <p>Carga un archivo EPUB para visualizarlo como un árbol</p>
+                <p style="margin-top: 1rem; font-size: 0.9rem;">Haz click en "Load EPUB" para comenzar</p>
+            </div>
+
+            <tree-node v-else :node="tree" :level="0" @toggle="toggleNode"></tree-node>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        const TreeNode = {
+            name: 'TreeNode',
+            props: ['node', 'level'],
+            template: `
+                <div class="tree-node">
+                    <div class="node-header" @click="$emit('toggle', node.id)">
+                        <span class="toggle">
+                            {{ node.children.length > 0 ? (node.collapsed ? '▶' : '▼') : '•' }}
+                        </span>
+                        <div class="node-content" :class="'node-type-' + node.type">
+                            <span v-if="node.type === 'book'">📖 {{ node.content }}</span>
+                            <span v-else-if="node.type === 'chapter'">📑 {{ node.content }}</span>
+                            <span v-else-if="node.type === 'section'">📄 {{ node.content }}</span>
+                            <span v-else>{{ node.content }}</span>
+                        </div>
+                    </div>
+                    <div v-if="!node.collapsed && node.children.length > 0" class="node-children">
+                        <tree-node 
+                            v-for="child in node.children" 
+                            :key="child.id"
+                            :node="child"
+                            :level="level + 1"
+                            @toggle="$emit('toggle', $event)"
+                        ></tree-node>
+                    </div>
+                </div>
+            `
+        };
+
+        createApp({
+            components: {
+                TreeNode
+            },
+            data() {
+                return {
+                    tree: null,
+                    loading: false,
+                    loadingMessage: 'Procesando EPUB...',
+                    error: null,
+                    expandLevel: 2,
+                    stats: {
+                        chapters: 0,
+                        sections: 0,
+                        paragraphs: 0
+                    },
+                    epubData: null
+                };
+            },
+            methods: {
+                triggerFileInput() {
+                    this.$refs.fileInput.click();
+                },
+
+                async handleFileUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    console.log('Archivo seleccionado:', file.name);
+
+                    this.loading = true;
+                    this.error = null;
+                    this.loadingMessage = 'Leyendo archivo EPUB...';
+
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        console.log('Archivo leído, tamaño:', arrayBuffer.byteLength);
+
+                        this.loadingMessage = 'Descomprimiendo EPUB...';
+                        const zip = await JSZip.loadAsync(arrayBuffer);
+                        console.log('ZIP cargado, archivos:', Object.keys(zip.files).length);
+
+                        this.loadingMessage = 'Analizando estructura...';
+                        const opfFile = await this.findOpfFile(zip);
+                        console.log('OPF encontrado:', opfFile);
+
+                        const opfContent = await zip.file(opfFile).async('string');
+                        const parser = new DOMParser();
+                        const opfDoc = parser.parseFromString(opfContent, 'text/xml');
+
+                        this.loadingMessage = 'Extrayendo contenido...';
+                        const contentFiles = await this.getContentFiles(opfDoc, zip, opfFile);
+                        console.log('Archivos de contenido:', contentFiles.length);
+
+                        this.loadingMessage = 'Construyendo árbol...';
+                        this.tree = await this.buildTree(contentFiles, file.name);
+                        console.log('Árbol construido:', this.tree);
+
+                        this.calculateStats();
+                        this.applyExpandLevel();
+
+                        this.epubData = {
+                            filename: file.name,
+                            hash: await this.hashFile(arrayBuffer)
+                        };
+
+                        console.log('Procesamiento completado');
+
+                    } catch (error) {
+                        console.error('Error procesando EPUB:', error);
+                        this.error = `Error al procesar el archivo: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                        // Resetear el input para permitir cargar el mismo archivo de nuevo
+                        event.target.value = '';
+                    }
+                },
+
+                async findOpfFile(zip) {
+                    try {
+                        const container = await zip.file('META-INF/container.xml').async('string');
+                        const parser = new DOMParser();
+                        const containerDoc = parser.parseFromString(container, 'text/xml');
+                        const rootfile = containerDoc.querySelector('rootfile');
+                        return rootfile.getAttribute('full-path');
+                    } catch (error) {
+                        // Algunos EPUBs tienen estructuras diferentes, buscar archivos .opf
+                        for (const filename in zip.files) {
+                            if (filename.endsWith('.opf')) {
+                                return filename;
+                            }
+                        }
+                        throw new Error('No se encontró el archivo OPF');
+                    }
+                },
+
+                async getContentFiles(opfDoc, zip, opfPath) {
+                    const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+                    const manifest = {};
+
+                    // Construir manifest
+                    opfDoc.querySelectorAll('manifest item').forEach(item => {
+                        manifest[item.getAttribute('id')] = {
+                            href: item.getAttribute('href'),
+                            type: item.getAttribute('media-type')
+                        };
+                    });
+
+                    // Obtener spine (orden de lectura)
+                    const spineItems = opfDoc.querySelectorAll('spine itemref');
+                    const contentFiles = [];
+
+                    for (const item of spineItems) {
+                        const idref = item.getAttribute('idref');
+                        if (manifest[idref] && manifest[idref].type.includes('html')) {
+                            const filePath = opfDir + manifest[idref].href;
+                            try {
+                                const content = await zip.file(filePath).async('string');
+                                contentFiles.push(content);
+                            } catch (e) {
+                                console.warn('No se pudo leer:', filePath);
+                            }
+                        }
+                    }
+
+                    return contentFiles;
+                },
+
+                async buildTree(contentFiles, filename) {
+                    const parser = new DOMParser();
+                    let nodeId = 0;
+
+                    const rootNode = {
+                        id: `node-${nodeId++}`,
+                        type: 'book',
+                        content: filename.replace('.epub', ''),
+                        collapsed: false,
+                        children: []
+                    };
+
+                    for (const htmlContent of contentFiles) {
+                        const doc = parser.parseFromString(htmlContent, 'text/html');
+                        const body = doc.body;
+
+                        if (!body) continue;
+
+                        // Procesar headings y contenido
+                        const elements = body.querySelectorAll('h1, h2, h3, h4, h5, h6, p');
+                        let currentChapter = null;
+                        let currentSection = null;
+
+                        elements.forEach(el => {
+                            const text = el.textContent.trim();
+                            if (!text || text.length < 3) return;
+
+                            if (el.tagName.match(/H[1-2]/)) {
+                                // Capítulo
+                                currentChapter = {
+                                    id: `node-${nodeId++}`,
+                                    type: 'chapter',
+                                    content: text,
+                                    collapsed: true,
+                                    children: []
+                                };
+                                rootNode.children.push(currentChapter);
+                                currentSection = null;
+
+                            } else if (el.tagName.match(/H[3-6]/)) {
+                                // Sección
+                                const section = {
+                                    id: `node-${nodeId++}`,
+                                    type: 'section',
+                                    content: text,
+                                    collapsed: true,
+                                    children: []
+                                };
+
+                                if (currentChapter) {
+                                    currentChapter.children.push(section);
+                                    currentSection = section;
+                                } else {
+                                    rootNode.children.push(section);
+                                    currentSection = section;
+                                }
+
+                            } else if (el.tagName === 'P') {
+                                // Párrafo
+                                const paragraph = {
+                                    id: `node-${nodeId++}`,
+                                    type: 'paragraph',
+                                    content: text.length > 300 ? text.substring(0, 300) + '...' : text,
+                                    fullContent: text,
+                                    collapsed: false,
+                                    children: []
+                                };
+
+                                if (currentSection) {
+                                    currentSection.children.push(paragraph);
+                                } else if (currentChapter) {
+                                    currentChapter.children.push(paragraph);
+                                } else {
+                                    rootNode.children.push(paragraph);
+                                }
+                            }
+                        });
+                    }
+
+                    return rootNode;
+                },
+
+                toggleNode(nodeId) {
+                    const toggle = (node) => {
+                        if (node.id === nodeId) {
+                            node.collapsed = !node.collapsed;
+                            return true;
+                        }
+                        for (const child of node.children) {
+                            if (toggle(child)) return true;
+                        }
+                        return false;
+                    };
+                    toggle(this.tree);
+                },
+
+                applyExpandLevel() {
+                    const collapse = (node, currentLevel) => {
+                        if (currentLevel >= this.expandLevel) {
+                            node.collapsed = true;
+                        } else {
+                            node.collapsed = false;
+                        }
+                        node.children.forEach(child => collapse(child, currentLevel + 1));
+                    };
+
+                    if (this.tree) {
+                        collapse(this.tree, 0);
+                    }
+                },
+
+                calculateStats() {
+                    let chapters = 0;
+                    let sections = 0;
+                    let paragraphs = 0;
+
+                    const count = (node) => {
+                        if (node.type === 'chapter') chapters++;
+                        if (node.type === 'section') sections++;
+                        if (node.type === 'paragraph') paragraphs++;
+                        node.children.forEach(count);
+                    };
+
+                    count(this.tree);
+                    this.stats = { chapters, sections, paragraphs };
+                },
+
+                async hashFile(arrayBuffer) {
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                },
+
+                exportMeta() {
+                    const collectState = (node) => {
+                        const state = {
+                            id: node.id,
+                            type: node.type,
+                            collapsed: node.collapsed
+                        };
+                        if (node.children.length > 0) {
+                            state.children = node.children.map(collectState);
+                        }
+                        return state;
+                    };
+
+                    const meta = {
+                        version: '1.0',
+                        epub_filename: this.epubData.filename,
+                        epub_hash: this.epubData.hash,
+                        created: new Date().toISOString(),
+                        stats: this.stats,
+                        tree_state: collectState(this.tree)
+                    };
+
+                    const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = this.epubData.filename.replace('.epub', '.meta.json');
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
